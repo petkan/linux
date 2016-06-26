@@ -49,7 +49,8 @@ static bool init_keyring __initdata;
 #endif
 
 int integrity_digsig_verify(const unsigned int id, const char *sig, int siglen,
-			    const char *digest, int digestlen)
+			    const char *digest, int digestlen,
+			    struct integrity_iint_cache *iint)
 {
 	if (id >= INTEGRITY_KEYRING_MAX)
 		return -EINVAL;
@@ -72,7 +73,7 @@ int integrity_digsig_verify(const unsigned int id, const char *sig, int siglen,
 				     digest, digestlen);
 	case 2:
 		return asymmetric_verify(keyring[id], sig, siglen,
-					 digest, digestlen);
+					 digest, digestlen, iint);
 	}
 
 	return -EOPNOTSUPP;

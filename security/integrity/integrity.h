@@ -53,6 +53,9 @@
 #define IMA_APPRAISED_SUBMASK	(IMA_FILE_APPRAISED | IMA_MMAP_APPRAISED | \
 				 IMA_BPRM_APPRAISED | IMA_READ_APPRAISED)
 
+#define	IMA_IINT_BLACKLISTED_BIT	(BITS_PER_LONG - 1)
+#define	IMA_IINT_BLACKLISTED		(1UL << IMA_IINT_BLACKLISTED_BIT)
+
 enum evm_ima_xattr_type {
 	IMA_XATTR_DIGEST = 0x01,
 	EVM_XATTR_HMAC,
@@ -109,6 +112,10 @@ struct integrity_iint_cache {
 	enum integrity_status ima_read_status:4;
 	enum integrity_status evm_status:4;
 	struct ima_digest_data *ima_hash;
+#ifdef	CONFIG_IMA_BLACKLIST_KEYRING
+	struct key *key;
+	time_t last_time;
+#endif
 };
 
 /* rbtree tree calls to lookup, insert, delete
@@ -128,7 +135,8 @@ int __init integrity_read_file(const char *path, char **data);
 #ifdef CONFIG_INTEGRITY_SIGNATURE
 
 int integrity_digsig_verify(const unsigned int id, const char *sig, int siglen,
-			    const char *digest, int digestlen);
+			    const char *digest, int digestlen,
+			    struct integrity_iint_cache *iint);
 
 int __init integrity_init_keyring(const unsigned int id);
 int __init integrity_load_x509(const unsigned int id, const char *path);
@@ -136,7 +144,8 @@ int __init integrity_load_x509(const unsigned int id, const char *path);
 
 static inline int integrity_digsig_verify(const unsigned int id,
 					  const char *sig, int siglen,
-					  const char *digest, int digestlen)
+					  const char *digest, int digestlen,
+					  struct integrity_iint_cache *iint)
 {
 	return -EOPNOTSUPP;
 }
@@ -149,10 +158,12 @@ static inline int integrity_init_keyring(const unsigned int id)
 
 #ifdef CONFIG_INTEGRITY_ASYMMETRIC_KEYS
 int asymmetric_verify(struct key *keyring, const char *sig,
-		      int siglen, const char *data, int datalen);
+		      int siglen, const char *data, int datalen,
+		      struct integrity_iint_cache *);
 #else
 static inline int asymmetric_verify(struct key *keyring, const char *sig,
-				    int siglen, const char *data, int datalen)
+				    int siglen, const char *data, int datalen,
+				    struct integrity_iint_cache *)
 {
 	return -EOPNOTSUPP;
 }
