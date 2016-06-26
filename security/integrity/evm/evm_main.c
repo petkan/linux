@@ -161,7 +161,7 @@ static enum integrity_status evm_verify_hmac(struct dentry *dentry,
 			break;
 		rc = integrity_digsig_verify(INTEGRITY_KEYRING_EVM,
 					(const char *)xattr_data, xattr_len,
-					calc.digest, sizeof(calc.digest));
+					calc.digest, sizeof(calc.digest), NULL);
 		if (!rc) {
 			/* Replace RSA with HMAC if not mounted readonly and
 			 * not immutable
@@ -237,7 +237,7 @@ enum integrity_status evm_verifyxattr(struct dentry *dentry,
 
 	if (!iint) {
 		iint = integrity_iint_find(d_backing_inode(dentry));
-		if (!iint)
+		if (!iint || IS_ERR(iint))
 			return INTEGRITY_UNKNOWN;
 	}
 	return evm_verify_hmac(dentry, xattr_name, xattr_value,
@@ -295,6 +295,8 @@ static int evm_protect_xattr(struct dentry *dentry, const char *xattr_name,
 		struct integrity_iint_cache *iint;
 
 		iint = integrity_iint_find(d_backing_inode(dentry));
+		if (IS_ERR(iint))
+			return -EPERM;
 		if (iint && (iint->flags & IMA_NEW_FILE))
 			return 0;
 
@@ -364,6 +366,8 @@ static void evm_reset_status(struct inode *inode)
 	struct integrity_iint_cache *iint;
 
 	iint = integrity_iint_find(inode);
+	if (IS_ERR(iint))
+		return;
 	if (iint)
 		iint->evm_status = INTEGRITY_UNKNOWN;
 }

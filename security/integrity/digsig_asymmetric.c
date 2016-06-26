@@ -80,7 +80,8 @@ static struct key *request_asymmetric_key(struct key *keyring, uint32_t keyid)
 }
 
 int asymmetric_verify(struct key *keyring, const char *sig,
-		      int siglen, const char *data, int datalen)
+		      int siglen, const char *data, int datalen,
+		      struct integrity_iint_cache *iint)
 {
 	struct public_key_signature pks;
 	struct signature_v2_hdr *hdr = (struct signature_v2_hdr *)sig;
@@ -113,5 +114,11 @@ int asymmetric_verify(struct key *keyring, const char *sig,
 	ret = verify_signature(key, &pks);
 	key_put(key);
 	pr_debug("%s() = %d\n", __func__, ret);
+#ifdef	CONFIG_IMA_BLACKLIST_KEYRING
+	if (!ret && iint) {
+		iint->key = key;
+		iint->last_time = current_kernel_time().tv_sec;
+	}
+#endif
 	return ret;
 }
