@@ -90,6 +90,8 @@ static void ima_rdwr_violation_check(struct file *file,
 		if (atomic_read(&inode->i_readcount) && IS_IMA(inode)) {
 			if (!iint)
 				iint = integrity_iint_find(inode);
+			if (IS_ERR(iint))
+				return;
 			/* IMA_MEASURE is set from reader side */
 			if (iint && (iint->flags & IMA_MEASURE))
 				send_tomtou = true;
@@ -147,7 +149,7 @@ void ima_file_free(struct file *file)
 		return;
 
 	iint = integrity_iint_find(inode);
-	if (!iint)
+	if (!iint || IS_ERR(iint))
 		return;
 
 	ima_check_last_writer(iint, inode, file);
@@ -190,7 +192,7 @@ static int process_measurement(struct file *file, char *buf, loff_t size,
 
 	if (action) {
 		iint = integrity_inode_get(inode);
-		if (!iint)
+		if (!iint || IS_ERR(iint))
 			goto out;
 	}
 
@@ -334,7 +336,7 @@ void ima_post_path_mknod(struct dentry *dentry)
 		return;
 
 	iint = integrity_inode_get(inode);
-	if (iint)
+	if (iint && !IS_ERR(iint))
 		iint->flags |= IMA_NEW_FILE;
 }
 

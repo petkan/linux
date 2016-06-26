@@ -252,7 +252,7 @@ int ima_appraise_measurement(enum ima_hooks func,
 		rc = integrity_digsig_verify(INTEGRITY_KEYRING_IMA,
 					     (const char *)xattr_value, rc,
 					     iint->ima_hash->digest,
-					     iint->ima_hash->length);
+					     iint->ima_hash->length, iint);
 		if (rc == -EOPNOTSUPP) {
 			status = INTEGRITY_UNKNOWN;
 		} else if (rc) {
@@ -330,7 +330,7 @@ void ima_inode_post_setattr(struct dentry *dentry)
 
 	must_appraise = ima_must_appraise(inode, MAY_ACCESS, POST_SETATTR);
 	iint = integrity_iint_find(inode);
-	if (iint) {
+	if (iint && !IS_ERR(iint)) {
 		iint->flags &= ~(IMA_APPRAISE | IMA_APPRAISED |
 				 IMA_APPRAISE_SUBMASK | IMA_APPRAISED_SUBMASK |
 				 IMA_ACTION_RULE_FLAGS);
@@ -366,7 +366,7 @@ static void ima_reset_appraise_flags(struct inode *inode, int digsig)
 		return;
 
 	iint = integrity_iint_find(inode);
-	if (!iint)
+	if (!iint || IS_ERR(iint))
 		return;
 
 	iint->flags &= ~IMA_DONE_MASK;

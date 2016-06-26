@@ -21,11 +21,61 @@
 #include <linux/rbtree.h>
 #include <linux/file.h>
 #include <linux/uaccess.h>
+#include <linux/audit.h>
+#include <keys/system_keyring.h>
+#include <keys/asymmetric-type.h>
 #include "integrity.h"
 
 static struct rb_root integrity_iint_tree = RB_ROOT;
 static DEFINE_RWLOCK(integrity_iint_lock);
 static struct kmem_cache *iint_cache __read_mostly;
+
+#ifdef	CONFIG_IMA_BLACKLIST_KEYRING
+static int keys_in_keyring(struct key *keyring)
+{
+	if (key_is_instantiated(keyring)) {
+		return keyring->keys.nr_leaves_on_tree;
+	}
+
+	return -EINVAL;
+}
+
+/*
+ * returns negative if the key is not blacklisted and 0 if it is;
+ */
+static int iint_bl_check(struct integrity_iint_cache *iint)
+{
+	struct key *bl;
+	key_ref_t bl_t, key=ERR_PTR(-ENOKEY);
+
+	if (!iint)
+		return -1;
+
+	if (iint->flags & IMA_IINT_BLACKLISTED)
+		return 0;
+
+	bl = get_ima_blacklist_keyring();
+	if (!bl)
+		return -2;
+
+	if (!keys_in_keyring(bl))
+		return -3;
+
+	if (iint->last_time > bl->last_used_at)
+		return -4;
+
+	bl_t = make_key_ref(bl, 1);
+	if (iint->key)
+		key = keyring_search(bl_t, &key_type_asymmetric, iint->key->description);
+
+	if (IS_ERR(key))
+		return -5;
+
+	iint->flags |= IMA_IINT_BLACKLISTED;
+
+	return 0;
+}
+#endif	/* CONFIG_IMA_BLACKLIST_KEYRING */
 
 /*
  * __integrity_iint_find - return the iint associated with an inode
@@ -52,7 +102,8 @@ static struct integrity_iint_cache *__integrity_iint_find(struct inode *inode)
 }
 
 /*
- * integrity_iint_find - return the iint associated with an inode
+ * integrity_iint_find - return the iint associated with an inode, NULL or
+ * an error if the corrsponding key has been blacklisted in the meantime.
  */
 struct integrity_iint_cache *integrity_iint_find(struct inode *inode)
 {
@@ -65,6 +116,14 @@ struct integrity_iint_cache *integrity_iint_find(struct inode *inode)
 	iint = __integrity_iint_find(inode);
 	read_unlock(&integrity_iint_lock);
 
+#ifdef	CONFIG_IMA_BLACKLIST_KEYRING
+	if (!iint_bl_check(iint)) {
+		integrity_audit_msg(AUDIT_INTEGRITY_DATA, inode, NULL,
+				    "appraise_data", "blacklisted-key",
+				    -EINVAL, 0);
+		return ERR_PTR(-EINVAL);
+	}
+#endif
 	return iint;
 }
 
@@ -79,6 +138,10 @@ static void iint_free(struct integrity_iint_cache *iint)
 	iint->ima_bprm_status = INTEGRITY_UNKNOWN;
 	iint->ima_read_status = INTEGRITY_UNKNOWN;
 	iint->evm_status = INTEGRITY_UNKNOWN;
+#ifdef	CONFIG_IMA_BLACKLIST_KEYRING
+	iint->key = NULL;
+	iint->last_time = 0;
+#endif
 	kmem_cache_free(iint_cache, iint);
 }
 
@@ -159,6 +222,10 @@ static void init_once(void *foo)
 	iint->ima_bprm_status = INTEGRITY_UNKNOWN;
 	iint->ima_read_status = INTEGRITY_UNKNOWN;
 	iint->evm_status = INTEGRITY_UNKNOWN;
+#ifdef	CONFIG_IMA_BLACKLIST_KEYRING
+	iint->key = NULL;
+	iint->last_time = 0;
+#endif
 }
 
 static int __init integrity_iintcache_init(void)
