@@ -46,7 +46,7 @@ static int keys_in_keyring(struct key *keyring)
 static int iint_bl_check(struct integrity_iint_cache *iint)
 {
 	struct key *bl;
-	key_ref_t bl_t, key=ERR_PTR(-ENOKEY);
+	key_ref_t bl_t, ima=ERR_PTR(-ENOKEY), sys=ERR_PTR(-ENOKEY);
 
 	if (!iint)
 		return -1;
@@ -64,11 +64,16 @@ static int iint_bl_check(struct integrity_iint_cache *iint)
 	if (iint->last_time > bl->last_used_at)
 		return -4;
 
-	bl_t = make_key_ref(bl, 1);
-	if (iint->key)
-		key = keyring_search(bl_t, &key_type_asymmetric, iint->key->description);
-
-	if (IS_ERR(key))
+	if (iint->key) {
+		bl_t = make_key_ref(bl, true);
+		ima = keyring_search(bl_t, &key_type_asymmetric, iint->key->description);
+#ifdef	CONFIG_SYSTEM_BLACKLIST_KEYRING
+		bl_t = make_key_ref(blacklist_keyring, true);
+		sys = keyring_search(bl_t, &key_type_blacklist, iint->key->description);
+#endif
+	}
+	printk("%s: ima %p, sys %p\n", __func__, ima, sys);
+	if (IS_ERR(ima) && IS_ERR(sys))
 		return -5;
 
 	iint->flags |= IMA_IINT_BLACKLISTED;

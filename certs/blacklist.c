@@ -21,7 +21,7 @@
 #include <keys/system_keyring.h>
 #include "blacklist.h"
 
-static struct key *blacklist_keyring;
+struct key *blacklist_keyring;
 
 /*
  * The description must be a type prefix, a colon and then an even number of
@@ -71,7 +71,7 @@ static void blacklist_describe(const struct key *key, struct seq_file *m)
 	seq_puts(m, key->description);
 }
 
-static struct key_type key_type_blacklist = {
+struct key_type key_type_blacklist = {
 	.name			= "blacklist",
 	.vet_description	= blacklist_vet_description,
 	.preparse		= blacklist_preparse,

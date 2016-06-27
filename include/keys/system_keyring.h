@@ -34,6 +34,8 @@ extern int restrict_link_by_builtin_and_secondary_trusted(
 #endif
 
 #ifdef CONFIG_SYSTEM_BLACKLIST_KEYRING
+extern struct key *blacklist_keyring;
+extern struct key_type key_type_blacklist;
 extern int mark_hash_blacklisted(const char *hash);
 extern int is_hash_blacklisted(const u8 *hash, size_t hash_len,
 			       const char *type);
